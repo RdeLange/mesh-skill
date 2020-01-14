@@ -229,6 +229,9 @@ class MeshSkill(MycroftSkill):
         message_json['source'] = str(self.location_id)
         # LOG.info("This device location is: " + DeviceApi().get()["description"])
         msg_type = message.data.get("MessageTypeKeyword")
+        if self.config_core.get('lang') == 'nl-nl':
+           if message.data.get("MessageTypeKeyword") == 'commando': msg_type = 'command'
+           elif message.data.get("MessageTypeKeyword") == 'bericht': msg_type = 'message'
         self.targetDevice = self.get_response('request.location', data={"result": msg_type})
         message_json[msg_type] = self.get_response('request.details', data={"result": msg_type})
         LOG.info("Preparing to Send a message to " + self.targetDevice)
