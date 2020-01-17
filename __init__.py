@@ -249,12 +249,19 @@ class MeshSkill(MycroftSkill):
         message_json['source'] = str(self.location_id)
         # message_json = {'source': str(self.location_id)}
         msg_type = message.data.get("MessageTypeKeyword")
+        if self.config_core.get('lang') == 'nl-nl':
+           if message.data.get("MessageTypeKeyword") == 'commando': 
+              msg_type = 'command'
+              msg_type_lang = 'commando'
+           elif message.data.get("MessageTypeKeyword") == 'bericht': 
+              msg_type = 'message'
+              msg_type_lang = 'bericht'
         voice_payload = str(message.data.get('utterance'))
         location_request = self.location_regex(voice_payload)
         if location_request is None:  # location was not in the utterance
             LOG.info("The user did not speak a location")
             # Have Mycroft request the location
-            location_payload = self.get_response('request.location', data={"result": msg_type})
+            location_payload = self.get_response('request.location', data={"result": msg_type_lang})
             if location_payload is None:
                 LOG.info("Didn't receive a location string")
             else:
@@ -266,14 +273,11 @@ class MeshSkill(MycroftSkill):
         else:  # location was in the utterance
             LOG.info("The user spoke the following location: " + location_request)
         
-        if self.config_core.get('lang') == 'nl-nl':
-           if message.data.get("MessageTypeKeyword") == 'commando': msg_type = 'command'
-           elif message.data.get("MessageTypeKeyword") == 'bericht': msg_type = 'message'
-
+        
         self.targetDevice = location_request
-        message_json[msg_type] = self.get_response('request.details', data={"result": msg_type})
+        message_json[msg_type] = self.get_response('request.details', data={"result": msg_type_lang})
         LOG.info("Preparing to Send a message to " + self.targetDevice)
-        self.speak_dialog('sending.message', data={"message": msg_type, "location": self.targetDevice},
+        self.speak_dialog('sending.message', data={"message": msg_type_lang, "location": self.targetDevice},
                           expect_response=False)
         mqtt_path = self.base_topic + "/RemoteDevices/" + str(self.targetDevice).lower()
         self.send_MQTT(mqtt_path, message_json)
