@@ -17,7 +17,7 @@ import random
 import json
 import paho.mqtt.client as mqtt
 import paho.mqtt.publish as publish
-import re
+# import re
 
 __author__ = 'PCWii'
 
@@ -56,7 +56,7 @@ class MeshSkill(MycroftSkill):
         self.broker_port = ''
         self.broker_uname = ''
         self.broker_pass = ''
-        self.location_id = ''
+        self.location_id = ''  # ToDo This will be retrieved from The the DeviceApi
         self.response_location = ''
 
     def on_connect(self, mqttc, obj, flags, rc):
@@ -112,19 +112,11 @@ class MeshSkill(MycroftSkill):
         if self._is_setup:
             self.mqtt_init()
 
-    def clean_base_topic(self, basetopic):
-        if basetopic[-1] == "/":
-            basetopic = basetopic[0:-1]
-        if basetopic[0] == "/":
-            basetopic = basetopic[1:]
-        return basetopic
-
     def on_websettings_changed(self):  # called when updating mycroft home page
         self._is_setup = False
         self.MQTT_Enabled = self.settings.get("MQTT_Enabled", False)  # used to enable / disable mqtt
         self.broker_address = self.settings.get("broker_address", "127.0.0.1")
-        raw_base_topic = self.settings.get("base_topic", "Mycroft")
-        self.base_topic = self.clean_base_topic(raw_base_topic)
+        self.base_topic = self.settings.get("base_topic", "Mycroft")
         self.broker_port = self.settings.get("broker_port", 1883)
         self.broker_uname = self.settings.get("broker_uname", "")
         self.broker_pass = self.settings.get("broker_pass", "")
@@ -168,17 +160,6 @@ class MeshSkill(MycroftSkill):
         mac = uuid.UUID(int=node).hex[-12:]
         LOG.info("MQTT using UUID: " + mac)
         return mac
-
-    def location_regex(self, message_str):
-        return_list = []
-        regex_string = r".*((to the|to)|(at the|at)) (?P<location>.*)"
-        if self.config_core.get('lang') == 'nl-nl':
-            regex_string = r".*((naar de|naar)|(op de|op)) (?P<location>.*)"
-        pri_regex = re.search(regex_string, message_str)
-        if pri_regex:
-            ret_location = pri_regex.group("location")
-            # print(ret_location)
-            return ret_location
 
     # utterance event used for notifications ***This is what the user requests***
     def handle_utterances(self, message):
@@ -241,36 +222,17 @@ class MeshSkill(MycroftSkill):
         ws.close()
 
     # First step in the dialog is to receive the initial request to "send a message/command"
-    # Todo Add .optionally("LocationRegex") to make the intent spoken language agnostic
     @intent_handler(IntentBuilder("SendMessageIntent").require("SendKeyword").require("MessageTypeKeyword")
                     .optionally("RemoteKeyword").build())
     def handle_send_message_intent(self, message):
         message_json = {}  # create json object
         message_json['source'] = str(self.location_id)
-        # message_json = {'source': str(self.location_id)}
+        # LOG.info("This device location is: " + DeviceApi().get()["description"])
         msg_type = message.data.get("MessageTypeKeyword")
-        voice_payload = str(message.data.get('utterance'))
-        location_request = self.location_regex(voice_payload)
-        if location_request is None:  # location was not in the utterance
-            LOG.info("The user did not speak a location")
-            # Have Mycroft request the location
-            location_payload = self.get_response('request.location', data={"result": msg_type})
-            if location_payload is None:
-                LOG.info("Didn't receive a location string")
-            else:
-                words_spoken = len(location_payload.split())  # were more than one word(s) spoken
-            if words_spoken > 1:
-                location_request = self.location_regex(location_payload)
-            else:
-                location_request = location_payload
-        else:  # location was in the utterance
-            LOG.info("The user spoke the following location: " + location_request)
-        
         if self.config_core.get('lang') == 'nl-nl':
            if message.data.get("MessageTypeKeyword") == 'commando': msg_type = 'command'
            elif message.data.get("MessageTypeKeyword") == 'bericht': msg_type = 'message'
-
-        self.targetDevice = location_request
+        self.targetDevice = self.get_response('request.location', data={"result": msg_type})
         message_json[msg_type] = self.get_response('request.details', data={"result": msg_type})
         LOG.info("Preparing to Send a message to " + self.targetDevice)
         self.speak_dialog('sending.message', data={"message": msg_type, "location": self.targetDevice},
